@@ -61,23 +61,31 @@ exports.read = async function (path, options) {
 
 
     const externalBuffers = [];
-    const data = JSON.parse(dataString, function bufferReceiver(k, value) {
-        if (value && value.type === 'Buffer' && value.data) {
-            return Buffer.from(value.data);
-        } else if (value && value.type === 'ExternalBuffer' && typeof value.index === 'number' && typeof value.size === 'number') {
-            //JSON.parse is sync so we need to return a buffer sync, we will fill the buffer later
-            const buffer = Buffer.alloc(value.size);
-            externalBuffers.push({
-                index: +value.index,
-                buffer: buffer,
-            });
-            return buffer;
-        } else if (value && value.type === 'Infinity' && typeof value.sign === 'number') {
-            return Infinity * value.sign;
-        } else {
-            return value;
+    let data;
+    try {
+        data = JSON.parse(dataString, function bufferReceiver(k, value) {
+            if (value && value.type === 'Buffer' && value.data) {
+                return Buffer.from(value.data);
+            } else if (value && value.type === 'ExternalBuffer' && typeof value.index === 'number' && typeof value.size === 'number') {
+                //JSON.parse is sync so we need to return a buffer sync, we will fill the buffer later
+                const buffer = Buffer.alloc(value.size);
+                externalBuffers.push({
+                    index: +value.index,
+                    buffer: buffer,
+                });
+                return buffer;
+            } else if (value && value.type === 'Infinity' && typeof value.sign === 'number') {
+                return Infinity * value.sign;
+            } else {
+                return value;
+            }
+        });
+    } catch (err) {
+        // invalid JSON, ignore cache
+        return {
+            expireTime: 0,
         }
-    });
+    }
 
     //read external buffers
     await Promise.all(externalBuffers.map(async function (externalBuffer) {
